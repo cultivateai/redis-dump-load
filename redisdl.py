@@ -589,6 +589,7 @@ def main():
     parser.add_option('-p', '--port', help='connect to PORT (default 6379)')
     parser.add_option('-s', '--socket', help='connect to SOCKET')
     parser.add_option('-w', '--password', help='connect with PASSWORD')
+    parser.add_option('--tls', default=False, action='store_true', help='Use TLS to connect.')
     if help == DUMP:
         parser.add_option('-d', '--db', help='dump DATABASE (0-N, default 0)')
         parser.add_option('-k', '--keys', help='dump only keys matching specified glob-style pattern')
@@ -611,7 +612,6 @@ def main():
         parser.add_option('-E', '--encoding', help='set encoding to use while decoding data from redis', default='utf-8')
         parser.add_option('-A', '--use-expireat', help='use EXPIREAT rather than TTL/EXPIRE', action='store_true')
         parser.add_option('-B', '--backend', help='use specified streaming backend (load mode only)')
-        parser.add_option('--tls', default=False, action='store_true', help='Use TLS to connect.')
     options, args = parser.parse_args()
 
     if hasattr(options, 'load') and options.load:
