@@ -4,6 +4,7 @@ try:
     import json
 except ImportError:
     import simplejson as json
+import codecs
 import redis
 import sys
 import time as _time
@@ -105,24 +106,26 @@ class RedisWrapper(redis.Redis):
             return p.expireat(key, int(time))
 
 def client(host='localhost', port=6379, password=None, db=0,
-                 unix_socket_path=None, encoding='utf-8'):
+                 unix_socket_path=None, encoding='utf-8', ssl=False):
     if unix_socket_path is not None:
         r = RedisWrapper(unix_socket_path=unix_socket_path,
                         password=password,
                         db=db,
-                        charset=encoding)
+                        charset=encoding,
+                        ssl=ssl)
     else:
         r = RedisWrapper(host=host,
                         port=port,
                         password=password,
                         db=db,
-                        charset=encoding)
+                        charset=encoding,
+                        ssl=ssl)
     return r
 
 def dumps(host='localhost', port=6379, password=None, db=0, pretty=False,
-          unix_socket_path=None, encoding='utf-8', keys='*'):
+          unix_socket_path=None, encoding='utf-8', keys='*', ssl=False):
     r = client(host=host, port=port, password=password, db=db,
-               unix_socket_path=unix_socket_path, encoding=encoding)
+               unix_socket_path=unix_socket_path, encoding=encoding, ssl=ssl)
     kwargs = {}
     if not pretty:
         kwargs['separators'] = (',', ':')
@@ -146,7 +149,7 @@ class BytesWriteWrapper(object):
         return self.stream.write(str.encode())
 
 def dump(fp, host='localhost', port=6379, password=None, db=0, pretty=False,
-         unix_socket_path=None, encoding='utf-8', keys='*'):
+         unix_socket_path=None, encoding='utf-8', keys='*', ssl=False):
     
     try:
         fp.write('')
@@ -156,11 +159,11 @@ def dump(fp, host='localhost', port=6379, password=None, db=0, pretty=False,
     if pretty:
         # hack to avoid implementing pretty printing
         fp.write(dumps(host=host, port=port, password=password, db=db,
-            pretty=pretty, encoding=encoding, keys=keys))
+            pretty=pretty, encoding=encoding, keys=keys, ssl=ssl))
         return
 
     r = client(host=host, port=port, password=password, db=db,
-               unix_socket_path=unix_socket_path, encoding=encoding)
+               unix_socket_path=unix_socket_path, encoding=encoding, ssl=ssl)
     kwargs = {}
     if not pretty:
         kwargs['separators'] = (',', ':')
@@ -197,7 +200,7 @@ class StringReader(object):
     def handle_response(response, pretty, encoding):
         # if key does not exist, get will return None;
         # however, our type check requires that the key exists
-        return response.decode(encoding)
+        return codecs.encode(response, 'base64').decode()
 
 class ListReader(object):
     @staticmethod
@@ -304,9 +307,9 @@ def _empty(r):
         r.delete(key)
 
 def loads(s, host='localhost', port=6379, password=None, db=0, empty=False,
-          unix_socket_path=None, encoding='utf-8', use_expireat=False):
+          unix_socket_path=None, encoding='utf-8', use_expireat=False, ssl=False):
     r = client(host=host, port=port, password=password, db=db,
-               unix_socket_path=unix_socket_path, encoding=encoding)
+               unix_socket_path=unix_socket_path, encoding=encoding, ssl=ssl)
     if empty:
         _empty(r)
     table = json.loads(s)
@@ -332,6 +335,7 @@ def loads(s, host='localhost', port=6379, password=None, db=0, empty=False,
 
 def load_lump(fp, host='localhost', port=6379, password=None, db=0,
     empty=False, unix_socket_path=None, encoding='utf-8', use_expireat=False,
+    ssl=False
 ):
     s = fp.read()
     if py3:
@@ -339,7 +343,7 @@ def load_lump(fp, host='localhost', port=6379, password=None, db=0,
         # if bytes, decode to a string because loads requires input to be a string.
         if isinstance(s, bytes):
             s = s.decode(encoding)
-    loads(s, host, port, password, db, empty, unix_socket_path, encoding, use_expireat=use_expireat)
+    loads(s, host, port, password, db, empty, unix_socket_path, encoding, use_expireat=use_expireat, ssl=ssl)
 
 def get_ijson(local_streaming_backend):
     if local_streaming_backend:
@@ -423,12 +427,12 @@ def create_loader(fp, streaming_backend=None):
 
 def load_streaming(fp, host='localhost', port=6379, password=None, db=0,
     empty=False, unix_socket_path=None, encoding='utf-8', use_expireat=False,
-    streaming_backend=None,
+    streaming_backend=None, ssl=False
 ):
     loader = create_loader(fp, streaming_backend)
 
     r = client(host=host, port=port, password=password, db=db,
-               unix_socket_path=unix_socket_path, encoding=encoding)
+               unix_socket_path=unix_socket_path, encoding=encoding, ssl=ssl)
 
     counter = 0
     for key, item in loader():
@@ -451,21 +455,21 @@ def load_streaming(fp, host='localhost', port=6379, password=None, db=0,
 
 def load(fp, host='localhost', port=6379, password=None, db=0,
     empty=False, unix_socket_path=None, encoding='utf-8', use_expireat=False,
-    streaming_backend=None,
+    streaming_backend=None, ssl=False
 ):
     if have_streaming_load:
         load_streaming(fp, host=host, port=port, password=password, db=db,
             empty=empty, unix_socket_path=unix_socket_path, encoding=encoding,
-            use_expireat=use_expireat, streaming_backend=streaming_backend)
+            use_expireat=use_expireat, streaming_backend=streaming_backend, ssl=ssl)
     else:
         load_lump(fp, host=host, port=port, password=password, db=db,
             empty=empty, unix_socket_path=unix_socket_path, encoding=encoding,
-            use_expireat=use_expireat)
+            use_expireat=use_expireat, ssl=ssl)
 
 def _writer(r, p, key, type, value, ttl, expireat, use_expireat):
     p.delete(key)
     if type == 'string':
-        p.set(key, value)
+        p.set(key, codecs.decode(value.encode(), 'base64'))
     elif type == 'list':
         for element in value:
             p.rpush(key, element)
@@ -526,6 +530,8 @@ def main():
             args['empty'] = True
         if hasattr(options, 'backend') and options.backend:
             args['streaming_backend'] = options.backend
+
+        args['ssl'] = options.tls
         return args
 
     def do_dump(options):
@@ -605,6 +611,7 @@ def main():
         parser.add_option('-E', '--encoding', help='set encoding to use while decoding data from redis', default='utf-8')
         parser.add_option('-A', '--use-expireat', help='use EXPIREAT rather than TTL/EXPIRE', action='store_true')
         parser.add_option('-B', '--backend', help='use specified streaming backend (load mode only)')
+        parser.add_option('--tls', default=False, action='store_true', help='Use TLS to connect.')
     options, args = parser.parse_args()
 
     if hasattr(options, 'load') and options.load:
