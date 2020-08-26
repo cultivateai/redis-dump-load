@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import os.path
+import setuptools
 from distutils.core import setup
 
 package_name = 'redis-dump-load'
