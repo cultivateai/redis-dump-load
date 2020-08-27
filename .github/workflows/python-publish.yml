@@ -26,8 +26,8 @@ jobs:
     - name: Locate Assets
       id: assets
       run: |
-        echo "::set-output name=path::$(ls dist/*.whl)\n"
-        echo "::set-output name=name::$(cd dist && ls *.whl)\n"
+        echo "::set-output name=path::$(ls dist/*.whl)"
+        echo "::set-output name=name::$(cd dist && ls *.whl)"
 
     - name: Create Release
       id: create_release
