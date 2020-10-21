@@ -32,6 +32,9 @@ if py3:
 else:
     base_exception_class = StandardError
 
+class UnsupportedKeyError(base_exception_class):
+    pass
+
 class UnknownTypeError(base_exception_class):
     pass
 
@@ -260,7 +263,10 @@ def _read_key(key, r, pretty, encoding):
         raise KeyDeletedError
     reader = readers.get(type)
     if reader is None:
-        raise UnknownTypeError("Unknown key type: %s" % type)
+        if type == 'stream':
+            raise UnsupportedKeyError('Ignoring %s - %s is not supported' % (key, type))
+        else:
+            raise UnknownTypeError("Unknown key type: %s" % type)
     p = r.pipeline()
     p.watch(key)
     p.multi()
@@ -286,6 +292,10 @@ def _reader(r, pretty, encoding, keys='*'):
             try:
                 type, ttl, value = _read_key(encoded_key, r, pretty, encoding)
                 yield key, type, ttl, value
+                handled = True
+                break
+            except UnsupportedKeyError as exc:
+                print(exc)
                 handled = True
                 break
             except KeyDeletedError:
