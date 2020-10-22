@@ -295,7 +295,6 @@ def _reader(r, pretty, encoding, keys='*'):
                 handled = True
                 break
             except UnsupportedKeyError as exc:
-                print(exc)
                 handled = True
                 break
             except KeyDeletedError:
